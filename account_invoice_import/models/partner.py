@@ -9,18 +9,30 @@ from odoo.exceptions import UserError
 class ResPartner(models.Model):
     _inherit = 'res.partner'
 
-    invoice_import_id = fields.Many2one(
-        'account.invoice.import.config',
-        string='Invoice Import Configuration',
-        company_dependent=True)
+    invoice_import_ids = fields.One2many(
+        'account.invoice.import.config', 'partner_id',
+        string='Invoice Import Configuration')
+    invoice_import_count = fields.Integer(
+        compute='compute_invoice_import_count',
+        string='Number of Invoice Import Configurations',
+        readonly=True)
+
+    def compute_invoice_import_count(self):
+        config_data = self.env['account.invoice.import.config'].read_group(
+            [('partner_id', 'in', self.ids)], ['partner_id'], ['partner_id'])
+        mapped_data = dict([
+            (config['partner_id'][0], config['partner_id_count'])
+            for config in config_data])
+        for partner in self:
+            partner.invoice_import_count = mapped_data.get(partner.id, 0)
 
     def invoice_import2import_config(self):
         self.ensure_one()
-        if not self.invoice_import_id:
+        if not self.invoice_import_ids:  # TODO move method elsewhere ?
             raise UserError(_(
                 "Missing Invoice Import Configuration on partner '%s'.")
                 % self.name_get()[0][1])
-        config = self.invoice_import_id
+        config = self.invoice_import_ids[0]
         vals = {
             'invoice_line_method': config.invoice_line_method,
             'account_analytic': config.account_analytic_id or False,
